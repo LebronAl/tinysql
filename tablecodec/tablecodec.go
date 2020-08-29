@@ -43,6 +43,7 @@ const (
 	RecordRowKeyLen       = prefixLen + idLen /*handle*/
 	tablePrefixLength     = 1
 	recordPrefixSepLength = 2
+	indexPrefixSepLength  = 2
 )
 
 // TableSplitKeyLen is the length of key 't{table_id}' which is used for table split.
@@ -71,7 +72,30 @@ func EncodeRowKeyWithHandle(tableID int64, handle int64) kv.Key {
 
 // DecodeRecordKey decodes the key and gets the tableID, handle.
 func DecodeRecordKey(key kv.Key) (tableID int64, handle int64, err error) {
-	/* Your code here */
+	k := key
+	if !key.HasPrefix(tablePrefix) {
+		err = errInvalidKey.GenWithStack("invalid key - %q", k)
+		return
+	}
+
+	key, tableID, err = codec.DecodeInt(key[len(tablePrefix):])
+	if err != nil {
+		return
+	}
+
+	if key.HasPrefix(indexPrefixSep) {
+		err = errInvalidKey.GenWithStack("invalid parameter with index key - %q", k)
+		return
+	}
+	if !key.HasPrefix(recordPrefixSep) {
+		err = errInvalidKey.GenWithStack("invalid record key - %q", k)
+		return
+	}
+
+	_, handle, err = codec.DecodeInt(key[len(recordPrefixSep):])
+	if err != nil {
+		return
+	}
 	return
 }
 
@@ -94,8 +118,31 @@ func EncodeIndexSeekKey(tableID int64, idxID int64, encodedValue []byte) kv.Key 
 
 // DecodeIndexKeyPrefix decodes the key and gets the tableID, indexID, indexValues.
 func DecodeIndexKeyPrefix(key kv.Key) (tableID int64, indexID int64, indexValues []byte, err error) {
-	/* Your code here */
-	return tableID, indexID, indexValues, nil
+	k := key
+	if !key.HasPrefix(tablePrefix) {
+		err = errInvalidKey.GenWithStack("invalid key - %q", k)
+		return
+	}
+
+	key, tableID, err = codec.DecodeInt(key[len(tablePrefix):])
+	if err != nil {
+		return
+	}
+
+	if key.HasPrefix(recordPrefixSep) {
+		err = errInvalidKey.GenWithStack("invalid parameter with record key - %q", k)
+		return
+	}
+	if !key.HasPrefix(indexPrefixSep) {
+		err = errInvalidKey.GenWithStack("invalid index key - %q", k)
+		return
+	}
+
+	indexValues, indexID, err = codec.DecodeInt(key[len(indexPrefixSep):])
+	if err != nil {
+		return
+	}
+	return
 }
 
 // DecodeIndexKey decodes the key and gets the tableID, indexID, indexValues.
